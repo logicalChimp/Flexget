@@ -24,12 +24,19 @@
 - When invoked directly via `uv run scripts/bundle_webui.py` (as the Dockerfile does), the WebUI is ALWAYS bundled — `BUNDLE_WEBUI` is not checked
 - `V2_WEBUI_LOCATION` env var overrides the v2 dist.zip source; accepts HTTP/HTTPS URL or local file path; exposed as a Docker `ARG` for build-time override
 
-## run_server.sh behaviour
+# run_server.sh behaviour
 
 - Takes an optional parameter: no args = start if not running; `restart` = stop then start; `stop` = stop only (no restart)
 - If `FLEXGET_CONFIG` is unset, falls back to `.venv/config.yml`, auto-creating it with a minimal example task if the file does not exist
 - Loads `.env` from repo root before starting (non-overwriting, same pattern as `manual_release.sh`)
 
-## Known pre-existing test failures
+## Series metadata timing
+- `series_name`, `series_season`, `series_episode`, `quality` etc. are set by `populate_entry_fields()` in `flexget/components/series/series.py:74`
+- These are set during the `metainfo` phase — BEFORE `modify`
+- Tasks that reformat titles during `modify` (e.g. converting `Show - 12` to `Show S01E12`) will have no series fields populated, because the parser saw the raw title
+- Post-execution enrichment is possible by calling `metainfo_series.guess_entry(entry)` and `metainfo_movie.guess_entry(entry)` directly — both are safe outside a task phase (pure parsing, no DB/HTTP)
 
-- `tests/test_npo_watchlist.py` — 3 tests fail due to `chardet` 7.x emitting a `DeprecationWarning` via `html5lib`, which FlexGet promotes to a plugin abort; unrelated to application logic
+## Entry status persistence
+- There is NO table tracking per-entry accepted/rejected/pending status across task runs
+- `status_execution` table only stores aggregate counts (produced/accepted/rejected/failed) per run
+- `entry_dump` in the execute stream only includes `task.entries` (undecided + accepted) — rejected entries are not included
